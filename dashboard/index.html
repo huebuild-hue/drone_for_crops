@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Drone Flight Log Dashboard</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-battery: #38bdf8;
+      --accent-ndvi: #4ade80;
+      --alert-bg: rgba(239, 68, 68, 0.18);
+      --alert-text: #fca5a5;
+      --alert-border: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text-main);
+      padding: 2rem;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 1rem;
+    }
+
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+    }
+
+    header .badge {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+      background: #0ea5e9;
+      color: #0f172a;
+      font-weight: 700;
+    }
+
+    /* Cards */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .card-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .card-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .card-sub {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* Chart Panel */
+    .panel {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .panel-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .legend {
+      display: flex;
+      gap: 1rem;
+      font-size: 0.85rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+    }
+
+    .chart-wrapper {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    svg.chart {
+      width: 100%;
+      height: 240px;
+      display: block;
+    }
+
+    .grid-line {
+      stroke: #334155;
+      stroke-dasharray: 3 3;
+      stroke-width: 1;
+    }
+
+    .axis-label {
+      fill: var(--text-muted);
+      font-size: 10px;
+      text-anchor: middle;
+    }
+
+    .chart-line-battery {
+      fill: none;
+      stroke: var(--accent-battery);
+      stroke-width: 2.5;
+    }
+
+    .chart-line-ndvi {
+      fill: none;
+      stroke: var(--accent-ndvi);
+      stroke-width: 2.5;
+    }
+
+    .chart-dot-battery {
+      fill: var(--accent-battery);
+    }
+
+    .chart-dot-ndvi {
+      fill: var(--accent-ndvi);
+    }
+
+    /* Table */
+    .table-wrapper {
+      overflow-x: auto;
+      margin-top: 0.5rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      text-align: left;
+    }
+
+    th {
+      background-color: rgba(15, 23, 42, 0.6);
+      padding: 0.75rem;
+      color: var(--text-muted);
+      font-weight: 600;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    td {
+      padding: 0.65rem 0.75rem;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    tr.low-battery {
+      background-color: var(--alert-bg);
+    }
+
+    tr.low-battery td {
+      color: var(--alert-text);
+      font-weight: 600;
+    }
+
+    .badge-alert {
+      display: inline-block;
+      background: var(--alert-border);
+      color: #fff;
+      font-size: 0.65rem;
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+      margin-left: 0.4rem;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Drone Flight Log Dashboard</h1>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.2rem;">Survey mission: Field 04 - Crop Health Monitoring</p>
+      </div>
+      <span class="badge">Completed</span>
+    </header>
+
+    <!-- Summary Cards -->
+    <section class="cards-grid">
+      <div class="card">
+        <span class="card-label">Flight Duration</span>
+        <span class="card-value" id="stat-duration">--</span>
+        <span class="card-sub">12 log entries</span>
+      </div>
+      <div class="card">
+        <span class="card-label">Max Altitude</span>
+        <span class="card-value" id="stat-altitude">--</span>
+        <span class="card-sub">Survey target: 20 m</span>
+      </div>
+      <div class="card">
+        <span class="card-label">Average Speed</span>
+        <span class="card-value" id="stat-speed">--</span>
+        <span class="card-sub">Ground velocity</span>
+      </div>
+      <div class="card">
+        <span class="card-label">Battery Used</span>
+        <span class="card-value" id="stat-battery">--</span>
+        <span class="card-sub" id="stat-battery-range">--</span>
+      </div>
+      <div class="card">
+        <span class="card-label">Mean NDVI</span>
+        <span class="card-value" id="stat-ndvi">--</span>
+        <span class="card-sub">Canopy health index</span>
+      </div>
+      <div class="card">
+        <span class="card-label">Low-battery points</span>
+        <span class="card-value" id="stat-low-battery">--</span>
+        <span class="card-sub">Battery &lt; 20%</span>
+      </div>
+    </section>
+
+    <!-- Chart Panel -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Telemetry Trends Over Time</h2>
+        <div class="legend">
+          <div class="legend-item">
+            <div class="legend-color" style="background: var(--accent-battery);"></div>
+            <span>Battery (%) [Left Axis]</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color" style="background: var(--accent-ndvi);"></div>
+            <span>NDVI [Right Axis]</span>
+          </div>
+        </div>
+      </div>
+      <div class="chart-wrapper">
+        <svg class="chart" id="flight-chart" viewBox="0 0 800 240"></svg>
+      </div>
+    </section>
+
+    <!-- Data Table Panel -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Flight Log Records</h2>
+        <span style="font-size: 0.8rem; color: var(--text-muted);">Rows highlighted in red indicate critical battery (&lt; 20%)</span>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Latitude</th>
+              <th>Longitude</th>
+              <th>Altitude (m)</th>
+              <th>Speed (m/s)</th>
+              <th>Battery (%)</th>
+              <th>NDVI Mean</th>
+            </tr>
+          </thead>
+          <tbody id="log-table-body">
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const flightLogs = [
+      { timestamp: "2025-05-10T10:00:00Z", lat: 36.12345, lon: -119.45678, altitude_m: 19.8, speed_mps: 4.2, battery_pct: 98, ndvi_mean: 0.22 },
+      { timestamp: "2025-05-10T10:01:00Z", lat: 36.12380, lon: -119.45650, altitude_m: 20.1, speed_mps: 4.5, battery_pct: 91, ndvi_mean: 0.28 },
+      { timestamp: "2025-05-10T10:02:00Z", lat: 36.12415, lon: -119.45620, altitude_m: 20.0, speed_mps: 4.6, battery_pct: 83, ndvi_mean: 0.35 },
+      { timestamp: "2025-05-10T10:03:00Z", lat: 36.12450, lon: -119.45590, altitude_m: 20.3, speed_mps: 4.4, battery_pct: 76, ndvi_mean: 0.42 },
+      { timestamp: "2025-05-10T10:04:00Z", lat: 36.12485, lon: -119.45560, altitude_m: 19.9, speed_mps: 4.3, battery_pct: 68, ndvi_mean: 0.48 },
+      { timestamp: "2025-05-10T10:05:00Z", lat: 36.12520, lon: -119.45530, altitude_m: 20.2, speed_mps: 4.5, battery_pct: 61, ndvi_mean: 0.55 },
+      { timestamp: "2025-05-10T10:06:00Z", lat: 36.12555, lon: -119.45500, altitude_m: 20.4, speed_mps: 4.7, battery_pct: 53, ndvi_mean: 0.61 },
+      { timestamp: "2025-05-10T10:07:00Z", lat: 36.12590, lon: -119.45470, altitude_m: 19.7, speed_mps: 4.4, battery_pct: 45, ndvi_mean: 0.64 },
+      { timestamp: "2025-05-10T10:08:00Z", lat: 36.12625, lon: -119.45440, altitude_m: 20.1, speed_mps: 4.2, battery_pct: 37, ndvi_mean: 0.58 },
+      { timestamp: "2025-05-10T10:09:00Z", lat: 36.12660, lon: -119.45410, altitude_m: 20.0, speed_mps: 4.1, battery_pct: 30, ndvi_mean: 0.47 },
+      { timestamp: "2025-05-10T10:10:00Z", lat: 36.12695, lon: -119.45380, altitude_m: 19.8, speed_mps: 3.9, battery_pct: 23, ndvi_mean: 0.34 },
+      { timestamp: "2025-05-10T10:11:00Z", lat: 36.12730, lon: -119.45350, altitude_m: 19.5, speed_mps: 3.8, battery_pct: 16, ndvi_mean: 0.21 }
+    ];
+
+    function initDashboard() {
+      const n = flightLogs.length;
+      const startT = new Date(flightLogs[0].timestamp);
+      const endT = new Date(flightLogs[n - 1].timestamp);
+      const durationMins = Math.round((endT - startT) / 60000) + 1; // 12-minute survey flight
+
+      const altitudes = flightLogs.map(d => d.altitude_m);
+      const speeds = flightLogs.map(d => d.speed_mps);
+      const batteries = flightLogs.map(d => d.battery_pct);
+      const ndvis = flightLogs.map(d => d.ndvi_mean);
+
+      const maxAlt = Math.max(...altitudes);
+      const avgSpeed = (speeds.reduce((a, b) => a + b, 0) / n).toFixed(2);
+      const batteryUsed = batteries[0] - batteries[n - 1];
+      const avgNdvi = (ndvis.reduce((a, b) => a + b, 0) / n).toFixed(2);
+      const lowBatteryCount = flightLogs.filter(d => d.battery_pct < 20).length;
+
+      // Populate summary cards
+      document.getElementById("stat-duration").textContent = `${durationMins} min`;
+      document.getElementById("stat-altitude").textContent = `${maxAlt.toFixed(1)} m`;
+      document.getElementById("stat-speed").textContent = `${avgSpeed} m/s`;
+      document.getElementById("stat-battery").textContent = `${batteryUsed}%`;
+      document.getElementById("stat-battery-range").textContent = `${batteries[0]}% down to ${batteries[n - 1]}%`;
+      document.getElementById("stat-ndvi").textContent = avgNdvi;
+      document.getElementById("stat-low-battery").textContent = lowBatteryCount;
+
+      // Render Table
+      const tbody = document.getElementById("log-table-body");
+      tbody.innerHTML = "";
+      flightLogs.forEach(row => {
+        const tr = document.createElement("tr");
+        if (row.battery_pct < 20) {
+          tr.className = "low-battery";
+        }
+
+        const timeStr = row.timestamp.substring(11, 19);
+        const batteryCell = row.battery_pct < 20 
+          ? `${row.battery_pct}% <span class="badge-alert">LOW</span>` 
+          : `${row.battery_pct}%`;
+
+        tr.innerHTML = `
+          <td>${timeStr}</td>
+          <td>${row.lat.toFixed(5)}</td>
+          <td>${row.lon.toFixed(5)}</td>
+          <td>${row.altitude_m.toFixed(1)}</td>
+          <td>${row.speed_mps.toFixed(1)}</td>
+          <td>${batteryCell}</td>
+          <td>${row.ndvi_mean.toFixed(2)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Render SVG Chart
+      renderChart();
+    }
+
+    function renderChart() {
+      const svg = document.getElementById("flight-chart");
+      const width = 800;
+      const height = 240;
+      const padding = { top: 20, right: 50, bottom: 35, left: 50 };
+      const chartW = width - padding.left - padding.right;
+      const chartH = height - padding.top - padding.bottom;
+
+      const n = flightLogs.length;
+      const getX = i => padding.left + (i / (n - 1)) * chartW;
+      // Battery scale: 0 to 100%
+      const getYBattery = val => padding.top + chartH - (val / 100) * chartH;
+      // NDVI scale: 0 to 1.0
+      const getYNDVI = val => padding.top + chartH - (val / 1.0) * chartH;
+
+      let elements = "";
+
+      // Horizontal grid lines & left/right axis labels
+      for (let step = 0; step <= 4; step++) {
+        const y = padding.top + (chartH / 4) * step;
+        const battVal = 100 - step * 25;
+        const ndviVal = (1.0 - step * 0.25).toFixed(2);
+        elements += `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" class="grid-line" />`;
+        elements += `<text x="${padding.left - 8}" y="${y + 3}" class="axis-label" text-anchor="end">${battVal}%</text>`;
+        elements += `<text x="${width - padding.right + 8}" y="${y + 3}" class="axis-label" text-anchor="start">${ndviVal}</text>`;
+      }
+
+      // Battery polyline and dots
+      const batteryPoints = flightLogs.map((d, i) => `${getX(i)},${getYBattery(d.battery_pct)}`).join(" ");
+      elements += `<polyline points="${batteryPoints}" class="chart-line-battery" />`;
+
+      // NDVI polyline and dots
+      const ndviPoints = flightLogs.map((d, i) => `${getX(i)},${getYNDVI(d.ndvi_mean)}`).join(" ");
+      elements += `<polyline points="${ndviPoints}" class="chart-line-ndvi" />`;
+
+      // Dots and time labels
+      flightLogs.forEach((d, i) => {
+        const x = getX(i);
+        const yB = getYBattery(d.battery_pct);
+        const yN = getYNDVI(d.ndvi_mean);
+        elements += `<circle cx="${x}" cy="${yB}" r="3.5" class="chart-dot-battery" />`;
+        elements += `<circle cx="${x}" cy="${yN}" r="3.5" class="chart-dot-ndvi" />`;
+
+        // Time label on X-axis (every 2 entries or first/last to avoid clutter)
+        if (i % 2 === 0 || i === n - 1) {
+          const tLabel = d.timestamp.substring(11, 16);
+          elements += `<text x="${x}" y="${height - 10}" class="axis-label">${tLabel}</text>`;
+        }
+      });
+
+      svg.innerHTML = elements;
+    }
+
+    document.addEventListener("DOMContentLoaded", initDashboard);
+  </script>
+</body>
+</html>
